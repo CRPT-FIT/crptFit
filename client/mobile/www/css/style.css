@@ -1,0 +1,55 @@
+/* Empty. Add your own CSS if you like */
+img{
+  height: 200px;
+  width: 200px;
+}
+.profile-pic{
+  margin-top: 20px;
+}
+.stats{
+  margin: 10px auto 0;
+  display: block;
+  width: 120px;
+}
+.profile-pic img{
+  border-radius: 100%;
+  display: block;
+  margin: 0 auto;
+  border: 1px solid black;
+}
+.profile-name{
+  text-align: center;
+  margin-top: 20px;
+}
+.social-container{
+  text-align: center;
+}
+.recent-activity{
+  margin-top: 20px;
+}
+.social-icon{
+  position: absolute;
+  top: 20px;
+}
+.sideNav{
+  padding: 0;
+}
+.taskCom label {
+	color: #d9d9d9;
+	text-decoration: line-through;
+}
+.messageFoot, .messageFoot2{
+  margin-bottom: 10px;
+  width: 100%;
+  height: 50px;
+}
+.messageInput{
+  overflow: auto;
+  max-height: 100px;
+}
+.messageBubble{
+  border: 1px solid black;
+  border-radius: 5px;
+  background-color: black;
+  color: green;
+}
