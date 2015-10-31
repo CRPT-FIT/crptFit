@@ -3,11 +3,13 @@ var db = require('./mysql/config');
 var bodyParser = require('body-parser');
 var passport = require('passport');
 var morgan = require('morgan');
+var Promise = require('bluebird');
 var app = express();
-var port = process.env.PORT || 8100;
+var port = process.env.PORT;
 
 require('./mysql/models/client');
 require('./mysql/models/friend');
+require('./mysql/models/trainer');
 require('./mysql/models/task');
 require('./mysql/models/user');
 require('./mysql/models/friend_request');
@@ -19,9 +21,11 @@ require('./mysql/models/benchpress');
 require('./mysql/models/squat');
 require('./mysql/models/deadlift');
 require('./mysql/models/speed');
+require('./mysql/models/chatstore');
 
 require('./mysql/collections/clients');
 require('./mysql/collections/friends');
+require('./mysql/collections/trainers');
 require('./mysql/collections/tasks');
 require('./mysql/collections/users');
 require('./mysql/collections/friend_requests');
@@ -33,6 +37,7 @@ require('./mysql/collections/Benchpress');
 require('./mysql/collections/squats');
 require('./mysql/collections/deadlifts');
 require('./mysql/collections/speeds');
+require('./mysql/collections/chatstores');
 
 var session = require("express-session");
 
@@ -44,7 +49,7 @@ app.use(session({
   saveUninitialized: true
 }));
 
-app.use(express.static(__dirname + '/../client/mobile/www'));
+app.use(express.static(__dirname + '/../client/mobile/www/'));
 
 app.use(morgan('dev'));
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -90,29 +95,40 @@ app.get('/auth/user/:id', function (req, res) {
     res.json(result.toJSON())
   })
 })
-
 //News Feed Pulls Latest Completed Tasks of Friends
-// app.get('/auth/newsfeed', function (req, res) {
-//   db.collection('Friends').fetchByUser(req.user.attributes.id)
-//   .then(function(friends) {
-//     var friendsArray = friends.models;
-//     for(var i = 0; i < friendsArray.length; i++ ) {
-//       db.model('User').fetchById({
-//         id: friendsArray[i].attributes.friends_id
-//       })
-//       .then(function(result) {
-//         storage.push(result);
-//       })
-//     }})
-//       .then(function() {
-//         console.log('RES>JSON :', storage)
-//         return res.json(storage);
-//       }).then(function () {
-//         storage = [];
-//       })
-//   })
+var taskStore = [];
+app.get('/auth/newsfeed', function (req, res) {
+  db.collection('Friends').fetchByUser(req.user.attributes.id)
+  .then(function(users) {
+    console.log("THEY ARE MY FRIENDS", users)
+      return Promise.all(users.models.map(function(friend) {
+         return db.model('User').fetchById({
+          id: friend.attributes.friends_id
+        })
+      }))
+    })
+      .then(function(results){
+        console.log("I HOPE IT IS THERE", results);
+        return Promise.all(results.map(function(model) {
+          console.log("ANY TASKS HERE", model.relations.tasks.models)
+            model.relations.tasks.models.forEach(function(task){
+              if (task.attributes.complete === 1){
+                taskStore.push(task);
+              }
+            })
+         }))
+      })
+      .then(function(){
+        console.log("WHERE IS MY NEW FEED", taskStore)
+        res.json(taskStore)
+      })
+      .then(function(){
+        taskStore = [];
+      })
+});
 
-app.get('/auth/picture', function(req, res){
+// Grab the logged in user's user object
+app.get('/auth/user', function(req, res){
  db.model('User').fetchById({id: req.user.attributes.id})
  .then(function(user){
    res.json(user);
@@ -128,10 +144,9 @@ app.get('/logout', function(req, res){
 });
 
 // Get All User's Tasks
-app.get('/auth/tasks', ensureAuthenticated, function (req,res) {
+app.get('/auth/tasks', function (req,res) {
   db.collection('Tasks').fetchByUser(req.user.attributes.id)
   .then(function(tasks) {
-    console.log('THIS IS A TASK :', tasks);
     res.json(tasks.toJSON());
   });
 });
@@ -151,14 +166,54 @@ app.get('/auth/friends', function (req, res) {
       })
     }})
       .then(function() {
-        console.log('RES>JSON :', storage);
         return res.json(storage);
       }).then(function () {
         storage = [];
       });
   });
 
-//Search a Friends Friends
+// Fetch a User's Clients
+var Cstorage = [];
+app.get('/auth/clients', ensureAuthenticated,function (req, res) {
+  db.collection('Clients').fetchByUser(req.user.attributes.id)
+  .then(function(clients) {
+    var clientsArray = clients.models;
+    for(var i = 0; i < clientsArray.length; i++ ) {
+      db.model('User').fetchById({
+        id: clientsArray[i].attributes.clients_id
+      })
+      .then(function(result) {
+        Cstorage.push(result);
+      })
+    }})
+      .then(function() {
+        return res.json(Cstorage);
+      }).then(function () {
+        Cstorage = [];
+      });
+});
+//Fetch a User's Trainers
+var Tstorage = [];
+app.get('/auth/trainers', ensureAuthenticated, function (req, res) {
+  db.collection('Trainers').fetchByUser(req.user.attributes.id)
+  .then(function(trainers) {
+    var trainersArray = trainers.models;
+    for(var i = 0; i < trainersArray.length; i++ ) {
+      db.model('User').fetchById({
+        id: trainersArray[i].attributes.trainer_id
+      })
+      .then(function(result) {
+        Tstorage.push(result);
+      })
+    }})
+      .then(function() {
+        return res.json(Tstorage);
+      }).then(function () {
+        Tstorage = [];
+      });
+});
+
+//Search a Friend's Friends
   app.get('/auth/friends/:id', function (req, res) {
     db.collection('Friends').fetchByUser(req.params.id)
     .then(function(friends) {
@@ -172,7 +227,6 @@ app.get('/auth/friends', function (req, res) {
         })
       }})
         .then(function() {
-          console.log('RES>JSON :', storage)
           return res.json(storage);
         }).then(function () {
           storage = [];
@@ -180,52 +234,75 @@ app.get('/auth/friends', function (req, res) {
     });
 
 //Search All Users to Add as Friend
-app.get('auth/users/search:username', function (req, res) {
-  var Username = req.params.username;
-  db.collection('Users').searchByUsername(Username)
-  .then(function(friend) {
-    res.json(friend.toJSON());
-  })
-});
-
-db.collection('Users').searchByUsername('ted')
-  .then(function(allFriends) {
-    console.log("THIS IS WHAT I'M LOOKING FOR: ", allFriends.models);
-});
-
-
-// Fetch a User's Clients
-app.get('/auth/clients', ensureAuthenticated,function (req, res) {
-  db.collection('Clients').fetchByUser(req.user.attributes.id)
-  .then(function(clients) {
-    console.log('THESE ARE USER CLIENTS :', clients);
-    res.json(clients.toJSON());
-  });
-});
-
-//Fetch a User's Trainers
-app.get('/auth/trainers', function (req, res) {
-  db.collection('Trainers').fetchByUser(req.user.attributes.id)
-  .then(function(trainers) {
-    console.log('GET: THESE ARE USER TRAINERS :', trainers);
-    res.json(trainers.toJSON());
+app.get('/auth/search/:id', function (req, res) {
+  var username = req.params.id;
+  db.collection('Users').searchByUsername(username)
+  .then(function (username) {
+    return Promise.all(username.models.map(function(friend){
+      return db.model('User').fetchById({
+        id: friend.attributes.id
+      })
+    }))
+      .then(function (results){
+        return res.json(results);
+      })
   })
 })
 
-//Add a new Stat
-// app.post('/auth/stat/add', function (req, res) {
-// }
-
-// Fetch Chatroom
-app.get('/auth/chat/get:id', function (req, res){
-  var chatId = req.params.id;
-  db.model('Chat').fetchById(chatId)
-  .then(function(chat) {
-    console.log('THIS IS CHAT ROOM :', chat);
-    res.json(chat.relations.message.models.toJSON());
+//Notifications for Pending Friend Requests
+app.get('/auth/friendrequests', function (req, res) {
+  var userId = req.user.attributes.id;
+  db.collection('friendRequests').fetchByUser(userId)
+  .then(function(friendRequests) {
+    return Promise.all(friendRequests.models.map(function(filtered) {
+      if(result.attributes.status === 0) {
+        console.log('this is the result', filtered)
+        return filtered;
+      }
+    })).then(function(result) {
+      console.log('this is the finalresult of friend_requests :', result)
+      res.json(result);
+    });
   });
 });
 
+//Notifications for Pending Friend Requests
+app.get('/auth/clientrequests', function (req, res) {
+  var userId = req.user.attributes.id;
+  db.collection('clientRequests').fetchByUser(userId)
+  .then(function(clientRequests) {
+    return Promise.all(clientRequests.models.map(function(filtered) {
+      if(result.attributes.status === 0) {
+        console.log('this is the result', filtered)
+        return filtered;
+      }
+    })).then(function(result) {
+      console.log('this is the finalresult of client_requests :', result)
+      res.json(result);
+    });
+    });
+});
+
+// Fetch a User's Chat Sessions
+app.get('/auth/chatsessions', function(req, res) {
+var userId = req.user.attributes.id;
+db.model('User').fetchById({
+    id: userId
+  })
+  .then(function(result) {
+    console.log('THIS IS USER :', result.relations.chatstores.models);
+    return Promise.all(result.relations.chatstores.models.map(function(msg){
+      console.log('CHAT ID :', msg.attributes.chat_id)
+      return db.model('Chat').fetchById(msg.attributes.chat_id)
+    }))
+    .then(function (results){
+      console.log("PLEASE WORK::::::::>", results);
+      res.json(results);
+    })
+  });
+})
+
+// Fetch a User's Weights
 app.get('/auth/weight/:id', function (req, res){
   var userId = req.params.id;
   db.collection('Weights').fetchByUser(userId)
@@ -239,7 +316,6 @@ app.get('/auth/benchpress/:id', function (req, res){
   var userId = req.params.id;
   db.collection('BenchPress').fetchByUser(userId)
   .then(function(user){
-    console.log('THIS IS YOUR BENCHPRESS', user);
     res.json(user.toJSON());
   });
 });
@@ -275,13 +351,30 @@ app.get('/auth/speeds/:id', function (req, res){
 app.post('/auth/tasks/:taskname', function (req, res) {
   var task = req.params.taskname;
   db.model('Task').newTask({
-    description: taskname,
+    description: task,
     complete: false,
     user_id: req.user.attributes.id
-  }).save()
+  })
+  .save()
   .then(function(task) {
     return task;
   })
+  .catch(function (err) {
+    console.log('ERR IN POST /auth/tasks : ', err);
+  });
+});
+
+//Add a New Task to Another User
+app.post('/auth/tasks/add:userid', function (req, res) {
+  var userId = req.params.userid;
+  var taskname = req.body.taskname;
+  var task = req.params.taskname;
+  db.model('Task').newTask({
+    description: taskname,
+    complete: false,
+    user_id: req.user.attributes.id
+  })
+  .save()
   .catch(function (err) {
     console.log('ERR IN POST /auth/tasks : ', err);
   });
@@ -299,20 +392,18 @@ app.post('/auth/task/complete/:id', function(req, res) {
   });
 });
 
-// Confirm Client Request and adds Client to User
+//Confirm Client Request and adds Client to User
 app.post('/auth/confirmclient', function (req, res) {
   var userId = req.user.attributes.id;
   var clientId = req.params.id;
    db.model('clientRequest').acceptClientRequest({
     user_id: userId,
-    client_id: clientId,
-    updated_at: new Date()
+    client_id: clientId
   })
-  .then(function () {
+  .then(function (){
     db.model('clientRequest').acceptClientRequest({
       user_id: clientId,
-      client_id: userId,
-      updated_at: new Date()
+      client_id: userId
     })
   })
   .then(function (){
@@ -323,7 +414,7 @@ app.post('/auth/confirmclient', function (req, res) {
   .save()
   })
   .then(function (){
-  db.model('Trainer').newClient({
+  db.model('Trainer').newTrainer({
     trainer_id: clientId,
     user_id: user_id
   })
@@ -342,6 +433,7 @@ app.post('/auth/confirmclient', function (req, res) {
 app.post('/auth/clientreq/add:id', function (req, res){
   var userId = req.user.attributes.id;
   var clientId = req.params.id;
+  console.log("After the route is called", clientId)
   db.model('clientRequest').newClientRequest({
     client_id: clientId,
     user_id: userId,
@@ -357,10 +449,6 @@ app.post('/auth/clientreq/add:id', function (req, res){
       created_at: new Date()
     })
     .save()
-  })
-  .then(function (clientreq) {
-    console.log('ADD CLIENT REQUEST', clientreq);
-    return clientreq;
   })
   .catch(function (err){
     return err;
@@ -397,19 +485,18 @@ app.post('/auth/friendreq/add:id', function (req, res){
 })
 
 // Confirm friend request and add each other as friend
-
 app.post('/auth/confirmfriend/:id', function (req, res){
   var userId = req.user.attributes.id;
   var friendId = req.params.id;
   db.model('friendRequest').acceptFriendRequest({
-    user_id: userId,
     friend_id: friendId,
+    user_id: userId,
     updated_at: new Date()
   })
   .then(function () {
     db.model('friendRequest').acceptFriendRequest({
-      user_id: friendId,
       friend_id: userId,
+      user_id: friendId,
       updated_at: new Date()
     })
   })
@@ -438,14 +525,32 @@ app.post('/auth/confirmfriend/:id', function (req, res){
 
 //Creates a Chat Session
 app.post('/auth/chat/add:id', function (req, res){
+  var chatId;
   var userId1 = req.user.attributes.id;
   var userId2 = req.params.id;
   db.model('Chat').newChat({
-    user_id: userId1,
-    user2_id: userId2,
-    created_at: new Date()
-  })
-  .save()
+      created_at: new Date()
+    })
+    .save()
+    .then(function(result){
+      chatId = result.id;
+      console.log("THIS IS MY RESULT: ", result);
+      db.model('Chatstore').newChatStore({
+        chat_id: result.id,
+        user_id: userId1,
+        created_at: new Date()
+      })
+    .save()
+    })
+    .then(function(){
+      console.log("THIS IS MY SECOND RESULT: ", chatId);
+      db.model('Chatstore').newChatStore({
+        chat_id: chatId,
+        user_id: userId2,
+        created_at: new Date()
+      })
+      .save()
+    })
 });
 
 //Adds Messages to chat session
@@ -453,15 +558,15 @@ app.post('/auth/messages/add:id', function (req, res){
   var userId = req.user.attributes.id;
   var chatId = req.params.id;
   var body = req.body.message;
+  console.log(chatId, 'this is chatID', userId, 'this is user id', body, 'this is body')
   db.model('Message').newMessage({
     user_id: userId,
     chat_id: chatId,
-    text: message,
+    text: body,
     created_at: new Date()
   })
   .save()
 });
-
 //Add Current Weight
 app.post('/auth/weight/:stat', function (req, res) {
   var userId = req.user.attributes.id;
@@ -478,44 +583,42 @@ app.post('/auth/weight/:stat', function (req, res) {
 app.post('/auth/bench/:stat', function (req, res) {
   var userId = req.user.attributes.id;
   var currBench = req.params.stat;
-  db.model('benchpress').newBenchPress({
-    weight: currBench,
+  db.model('Benchpress').newBenchPress({
+    benchpress: currBench,
     user_id: userId,
     created_at: new Date()
   })
   .save();
 });
-
 //Add Current Squat
 app.post('/auth/squat/:stat', function (req, res) {
   var userId = req.user.attributes.id;
   var currSquat = req.params.stat;
   db.model('Squat').newSquat({
-    weight: currSquat,
+    squat: currSquat,
     user_id: userId,
     created_at: new Date()
   })
   .save();
 });
-
 // Current Deadlift
 app.post('/auth/deadlift/:stat', function (req, res) {
   var userId = req.user.attributes.id;
   var currDeadLift = req.params.stat;
-  db.model('Deadlift').newDeadLift({
-    weight: currDeadLift,
+  db.model('DeadLift').newDeadLift({
+    deadlift: currDeadLift,
     user_id: userId,
     created_at: new Date()
   })
   .save();
 });
-
 // Update Current Speed
 app.post('/auth/speed/:stat', function (req, res) {
   var userId = req.user.attributes.id;
   var currSpeed = req.params.stat;
+  console.log('YOUR SPEED ON POST BRO', currSpeed);
   db.model('Speed').newSpeed({
-    weight: currSpeed,
+    speed: currSpeed,
     user_id: userId,
     created_at: new Date()
   })

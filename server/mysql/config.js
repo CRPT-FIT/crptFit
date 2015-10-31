@@ -1,20 +1,45 @@
+var Promise = require('bluebird');
+
 var knex = require('knex')({
-  client: 'mysql',
-  connection: {
-    host     : '127.0.0.1',
-    user     : 'root',
-    password : '',
-    database : 'crptfit',
+  client: process.env.dbClient || 'mysql',
+  connection: process.env.DATABASE_URL || {
+    host     : process.env.dbHost || '127.0.0.1',
+    user     : process.env.dbUser || 'root',
+    password : process.env.dbPassword || '',
+    database : process.env.dbDatabase || 'crptfit',
     charset  : 'utf8'
+  },
+  pool: {
+    min: 0,
+    max: 18
   }
 });
 
 module.exports = db = require('bookshelf')(knex);
 db.plugin('registry');
 
-db.knex.schema.hasTable('users').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('users', function(t) {
+var buildTable = function(name, callback) {
+  return db.knex.schema.hasTable(name)
+  .then(function(exists) {
+    if (exists) {
+      return { name: name, created: false };
+    } else {
+      return db.knex.schema.createTable(name, callback);
+    }
+  })
+  .then(function(response) {
+    if (!response.name) {
+      qb = response;
+      if (qb) {
+        return { name: name, created: true };
+      } else {
+        return { name: name, created: false };
+      }
+    } else { return response; }
+  });
+};
+
+var userProfiles = buildTable('users', function(t) {
       t.increments('id').primary();
       t.string('fbId', 100);
       t.string('username', 100);
@@ -22,197 +47,124 @@ db.knex.schema.hasTable('users').then(function(exists) {
       t.string('birthday', 20);
       t.string('email', 30);
       t.string('gender', 10);
-      t.timestamps();
       t.text('profile');
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
+      t.timestamps();
 });
 
-db.knex.schema.hasTable('tasks').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('tasks', function(t) {
+var userTasks = buildTable('tasks', function(t) {
       t.increments('id').primary();
       t.string('description', 100);
       t.boolean('complete');
-      t.integer('user_id').references('id').inTable('users');
+      t.integer('user_id');
       t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
 });
 
-db.knex.schema.hasTable('clients').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('clients', function(t) {
+var userClients = buildTable('clients', function(t) {
       t.increments('id').primary();
-      t.integer('clients_id');
-      t.integer('user_id').references('id').inTable('users');
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
+      t.integer('client_id');
+      t.integer('user_id');
 });
 
-db.knex.schema.hasTable('trainers').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('trainers', function(t) {
+var userTrainers = buildTable('trainers', function(t) {
       t.increments('id').primary();
       t.integer('trainer_id');
-      t.integer('user_id').references('id').inTable('users');
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
+      t.integer('user_id');
 });
 
-db.knex.schema.hasTable('weights').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('weights', function(t) {
-      t.increments('id').primary();
-      t.integer('weight').references('id').inTable('users');
-      t.integer('user_id').references('id').inTable('users');
-      t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
-});
-
-db.knex.schema.hasTable('benchpress').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('benchpress', function(t) {
-      t.increments('id').primary();
-      t.integer('benchpress').references('id').inTable('users');
-      t.integer('user_id').references('id').inTable('users');
-      t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
-});
-
-db.knex.schema.hasTable('squats').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('squats', function(t) {
-      t.increments('id').primary();
-      t.integer('squat').references('id').inTable('users');
-      t.integer('user_id').references('id').inTable('users');
-      t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
-});
-
-db.knex.schema.hasTable('deadlifts').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('deadlifts', function(t) {
-      t.increments('id').primary();
-      t.integer('deadlift').references('id').inTable('users');
-      t.integer('user_id').references('id').inTable('users');
-      t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
-});
-
-db.knex.schema.hasTable('speeds').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('speeds', function(t) {
-      t.increments('id').primary();
-      t.integer('speed').references('id').inTable('users');
-      t.integer('user_id').references('id').inTable('users');
-      t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
-});
-
-db.knex.schema.hasTable('friends').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('friends', function(t) {
+var userFriends = buildTable('friends', function(t) {
       t.string('status', 50);
-      t.integer('friends_id').references('id').inTable('users');
-      t.integer('user_id').references('id').inTable('users');
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
+      t.integer('friends_id');
+      t.integer('user_id');
 });
 
-db.knex.schema.hasTable('chats').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('chats', function(t) {
+var userMessages = buildTable('messages', function(t) {
       t.increments('id').primary();
-      t.integer('user_id').references('id').inTable('users');
-      t.integer('user2_id').references('id').inTable('users');
-      t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
-});
-
-db.knex.schema.hasTable('messages').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('messages', function(t) {
-      t.increments('id').primary();
-      t.integer('chat_id').references('id').inTable('chats');
-      t.integer('user_id').references('id').inTable('user');
+      t.integer('chat_id');
+      t.integer('user_id');
       t.string('text', 200);
       t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
 });
 
-db.knex.schema.hasTable('friend_request').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('friend_request', function(t) {
+var userFriendRequest = buildTable('friend_request', function(t) {
       t.increments('id').primary();
       t.integer('friend_id');
       t.integer('user_id');
       t.integer('status', 10);
       t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
 });
 
-db.knex.schema.hasTable('client_request').then(function(exists) {
-  if (!exists) {
-    return db.knex.schema.createTable('client_request', function(t) {
+var userClientRequest = buildTable('client_request', function(t) {
       t.increments('id').primary();
       t.integer('client_id');
       t.integer('user_id');
       t.integer('status', 10);
       t.timestamps();
-    });
-  }
-})
-.then(function(t) {
-  console.log('created table:', t);
 });
 
+var userWeights = buildTable('weights', function(t) {
+      t.increments('id').primary();
+      t.integer('weight');
+      t.integer('user_id');
+      t.timestamps();
+});
 
-module.exports = db;
+var userChat = buildTable('chat', function(t) {
+      t.increments('id').primary();
+      t.timestamps();
+});
+
+var userChatStore = buildTable('chatstore', function(t) {
+      t.increments('id').primary();
+      t.integer('user_id');
+      t.integer('chat_id');
+      t.timestamps();
+});
+
+var userBenchPress = buildTable('benchpress', function(t) {
+      t.increments('id').primary();
+      t.integer('benchpress');
+      t.integer('user_id');
+      t.timestamps();
+});
+
+var userSquats = buildTable('squats', function(t) {
+      t.increments('id').primary();
+      t.integer('squat');
+      t.integer('user_id');
+      t.timestamps();
+});
+
+var userDeadLifts = buildTable('deadlifts', function(t) {
+      t.increments('id').primary();
+      t.integer('deadlift');
+      t.integer('user_id');
+      t.timestamps();
+    });
+
+var userSpeeds = buildTable('speeds', function(t) {
+      t.increments('id').primary();
+      t.integer('speed');
+      t.integer('user_id');
+      t.timestamps();
+});
+
+var userGeolocations = buildTable('geolocations', function(t) {
+      t.increments('id').primary();
+      t.integer('longtitude');
+      t.integer('latitude');
+      t.integer('user_id');
+      t.timestamps();
+});
+
+var tables = [userProfiles, userTasks, userClients, userTrainers, userFriends, userMessages, userFriendRequest, userClientRequest, userWeights, userChat, userChatStore, userBenchPress, userSquats, userDeadLifts, userSpeeds, userGeolocations];
+
+Promise.all(tables)
+.then(function(tables){
+  tables.forEach(function(table){
+    if(table.created) {
+      console.log('Bookshelf: created table', table.name);
+    } else {
+      console.log('Bookshelf:', table.name, 'table already exists');
+    }
+  });
+});

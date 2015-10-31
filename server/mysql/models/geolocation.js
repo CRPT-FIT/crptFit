@@ -2,13 +2,13 @@ var db = require('../config.js');
 
 require('./user');
 
-var Speed = db.Model.extend({
-  tableName: 'speeds',
-  chat: function () {
+var Geolocation = db.Model.extend({
+  tableName: 'geolocations',
+  user: function () {
     return this.belongsTo('User');
-  },
+  }
 }, {
-  newSpeed: function (options) {
+  newLocation: function (options) {
     return new this(options);
   },
   fetchById: function (id) {
@@ -18,4 +18,4 @@ var Speed = db.Model.extend({
   }
 });
 
-module.exports = db.model('Speed', Speed);
+module.exports = db.model('Geolocation', Geolocation);

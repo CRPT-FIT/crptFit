@@ -56,6 +56,33 @@ angular.module('crptFit', ['ionic', 'crptFit.controllers', 'crptFit.services', '
         }
       }
     })
+    .state('tab.benchpress', {
+      url: '/benchpress',
+      views: {
+        'progress-tab':{
+          templateUrl: 'templates/benchpress-tab.html',
+          controller: 'ProgressCtrlBench'
+        }
+      }
+    })
+    .state('tab.deadlift', {
+      url: '/deadlift',
+      views: {
+        'progress-tab':{
+          templateUrl: 'templates/deadlift-tab.html',
+          controller: 'ProgressCtrlDead'
+        }
+      }
+    })
+    .state('tab.squats', {
+      url: '/squats',
+      views: {
+        'progress-tab':{
+          templateUrl: 'templates/squats-tab.html',
+          controller: 'ProgressCtrlSquats'
+        }
+      }
+    })
     .state('tab.weight', {
       url: '/weight',
       views: {
@@ -88,7 +115,6 @@ angular.module('crptFit', ['ionic', 'crptFit.controllers', 'crptFit.services', '
       views: {
         'homepage-tab': {
           templateUrl: 'templates/homepage-tab.html',
-          controller: 'HomeCtrl'
         }
       }
     })
@@ -97,7 +123,6 @@ angular.module('crptFit', ['ionic', 'crptFit.controllers', 'crptFit.services', '
       views: {
         'messages-tab': {
           templateUrl: 'templates/messages-tab.html',
-          controller: 'MessagesCtrl'
         }
       }
     })
@@ -106,7 +131,6 @@ angular.module('crptFit', ['ionic', 'crptFit.controllers', 'crptFit.services', '
       views: {
         'messages-tab': {
           templateUrl: 'templates/messages-send-tab.html',
-          controller: 'MessagesCtrl'
         }
       }
     })
@@ -115,7 +139,6 @@ angular.module('crptFit', ['ionic', 'crptFit.controllers', 'crptFit.services', '
       views: {
         'social-tab': {
           templateUrl: 'templates/social-tab.html',
-          controller: 'SocialCtrl'
         }
       }
     })
@@ -124,7 +147,6 @@ angular.module('crptFit', ['ionic', 'crptFit.controllers', 'crptFit.services', '
       views: {
         'social-tab': {
           templateUrl: 'templates/profile-view.html',
-          controller: 'SocialCtrl'
         }
       }
     })
