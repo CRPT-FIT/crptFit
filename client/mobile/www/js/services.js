@@ -1,20 +1,66 @@
 angular.module('crptFit.services', [])
+// Start of Logged in User Factory ====================================================
+.factory('User', ['$http', '$q', function($http, $q){
+  var getUserObject = function(){
+    return $http({
+      method: 'get',
+      url: '/auth/user'
+    }).then(function(response){
+      return response.data;
+    })
+  };
+
+  return {
+    getUserObject: getUserObject
+  };
+}])
 // Start of Tasks Factory ====================================================
 .factory('Tasks', ['$http', function($http){
-  var tasks;
-  var setTasks = function(tasksList){
-    tasks = tasksList;
-  }
+  var tasks = [];
   return {
-    getTasksList: function(){
-      $http({
-        method: 'GET',
-        url: '/auth/tasks'
-      }).then(function(response){
-        setTasks(response.data);
-        console.log("Tasks returned from server:", response.data);
-      })
+    getTaskHolder: function(val){
+      tasks.push({description:val})
       return tasks;
+    },
+    finishTask : function(taskId, task){
+      console.log(taskId, task)
+      $http({
+        method: 'POST',
+        url: '/auth/task/complete/' +taskId,
+      });
+      console.log(task, 'clicked');
+      tasks.splice(tasks.indexOf(task), 1);
+    },
+    getTasksList: function(){
+      console.log(tasks, 'this is tasks as soon as its clicked')
+        tasks = [];
+        $http({
+          method: 'GET',
+          url: '/auth/tasks'
+        }).then(function(response){
+          response.data.forEach(function(x){
+            if(!x.complete){
+              tasks.push(x)
+            }
+          });
+            console.log("Tasks returned from server:", response.data);
+          });
+          return tasks;
+    },
+    addTaskToClient : function(uId, val){
+      $http({
+        method: 'POST',
+        url: '/auth/tasks/add'+uId,
+        data : {
+          taskname: val
+        }
+      });
+    },
+    addTaskToSelf: function(val){
+      $http({
+        method: 'POST',
+        url: '/auth/tasks/'+val
+      });
     }
   };
 }])
@@ -23,14 +69,18 @@ angular.module('crptFit.services', [])
   // Set up functions for ajax
   var friends = [];
   var clients = [];
-  var trainers = [
-    // The data inside of this array will come from a user's trainers table
-    // Right now, it is static information but will be pulled from the database
-    {username: 'Chris Castillo'},
-    {username: 'Paul Keller'}
-  ];
+  var trainers = [];
+  var searchResults = [];
+  var savedUserID;
+  var friendsPendingRequest = [];
 
   return {
+    userViewerSet: function(userID){
+      savedUserID = userID;
+    },
+    getUserID: function(){
+      return savedUserID;
+    },
     friendsList: function(){
       // Grab friends and store it in the friends array above (refactor - DRY)
       $http({
@@ -39,7 +89,6 @@ angular.module('crptFit.services', [])
       })
       .then(function(response){
         friends = response.data;
-        console.log("FRIENDS :",response.data)
       }, function(error){
         console.log(error);
       });
@@ -48,8 +97,25 @@ angular.module('crptFit.services', [])
     getFriendsLength: function(){
       return friends.length;
     },
+    getFriendRequests: function() {
+      return $http({
+        method: 'GET',
+        url: '/auth/friendrequests'
+      });
+    },
     sendFriendRequest: function(friend){
       // This function needs the proper AJAX request
+      // $http({
+      //   method: 'POST',
+      //   url: '/auth/friendrequests/'
+      // })
+      // .then(function(response){
+      //   friendsPendingRequest = response.data;
+      //   console.log("WHAT IS THIS", friendsPendingRequest)
+      // }, function(error){
+      //   console.log(error);
+      // });
+      // return friendsPendingRequest;
     },
     addFriend: function(friendId){
       // This function needs the proper AJAX request
@@ -68,7 +134,7 @@ angular.module('crptFit.services', [])
       })
       .then(function(response){
         clients = response.data;
-        console.log(friends);
+        console.log("CLIENTS :", response.data);
       }, function(error){
         console.log(error);
       });
@@ -87,6 +153,16 @@ angular.module('crptFit.services', [])
     },
     trainersList: function(){
       // This function needs the proper AJAX request
+      $http({
+        method: 'GET',
+        url: '/auth/trainers'
+      })
+      .then(function(response){
+        trainers = response.data;
+        console.log("Trainers :", response.data);
+      }, function(error){
+        console.log(error);
+      });
       return trainers;
     },
     getTrainersLength: function(){
@@ -102,7 +178,15 @@ angular.module('crptFit.services', [])
     searchResultsList: function(username){
       $http({
         method: 'GET',
-        url: 'auth/users/search' + username
+        url: '/auth/search/' + username
+      })
+      .then(function(response){
+        console.log("inside of the service calling SRL:", response.data)
+        return response.data;
+      }).then(function(response){
+        console.log("final part of SRL from service:", response);
+        searchResults = response;
+        return searchResults;
       });
     }
   };
@@ -110,77 +194,123 @@ angular.module('crptFit.services', [])
 
 // Start of Messages Factory ====================================================
 .factory('Message', ['$http', function($http){
-  var messages = [];
-//get user message table from db
+  var messages = {};
+  var messageReturn = [];
+  //get user message table from db
+  var room_ids = {};
+  var capChat;
+  var friends = [];
   return {
+    messageToPage : function(){
+      newRet = messageReturn;
+      console.log('LOOKING FOR THE DOUBLER', newRet)
+      return newRet;
+    },
     messageList : function(){
-      return messages;
+      messageReturn = [];
+      for(var key in messages){
+        if(messages[key] === parseInt(capChat)){
+          messageReturn.push(key);
+        }
+      }
+    },
+    clearCap: function(){
+      return capChat;
+    },
+    capturedChatID: function(val){
+      capChat = val;
+    },
+    captureMessages: function(){
+      return room_ids;
     },
     makeChat: function(userId){
       $http({
         method: 'POST',
         url: '/auth/chat/add'+userId
-      })
-      .then(function(){});
+      });
     },
-    getMessage : function(){
+    getFriends: function(){
       $http({
         method: 'GET',
-        url: '/auth/chat/'
-      }).then(function(response){
-        console.log('recieved message', response);
-        messages.push(response);
+        url: '/auth/friends'
+      })
+      .then(function(response){
+        console.log(response.data)
+        friends = response.data;
       }, function(error){
         console.log(error);
       });
     },
-    sendMessage : function(val){
-      console.log(val);
+    getMessage : function(){
+      //NOTE refactor for time complexity
+      $http({
+        method: 'GET',
+        url: '/auth/chatsessions'
+      }).then(function(response){
+        console.log(response, 'response data');
+          response.data.forEach(function(y){
+            y.chatstore.forEach(function(m){
+              // if(m.user_id !== 1){
+                friends.forEach(function(friend){
+                  if(friend.id === m.user_id){
+                    room_ids[y.id] = [friend.username, y.created_at];
+                  }
+                });
+              // }
+            });
+            y.message.forEach(function(z){
+              messages[z.text] = y.id;
+            });
+          });
+      }, function(error){
+        console.log(error);
+      });
+    },
+    getRoom: function(chatId){
+      capChat = chatId;
+      $http({
+        method: 'GET',
+        url: '/auth/chat/get' + chatId
+      }).then(function(response){
+
+      });
+    },
+    sendMessage: function(id, val){
+      messageReturn.push(val);
+      console.log(id);
       $http({
         method: 'POST',
-        url: '/auth/chat',
-        data: val
+        url: '/auth/messages/add' + id,
+        data: {message: val}
+      }).then(function(data){
+        console.log(data);
+      }, function(error){
+        console.log(error);
       });
-    }
+    },
   };
 }])
 .factory('Progress', ['$http', function($http){
-  var strength = [
-    //the data in this array will come from a users stats table
-     10,
-     20,
-     30,
-     50,
-     75
-  ];
-  var weight = [
-    //the data in this array will come from a users stats table
-     745,
-     600,
-     300,
-     200,
-     190
-  ];
-  var speed = [
-    //the data in this array will come from a users stats table and be modified before entry
-    14,19,2,40,3,90
-  ];
+  var strength = [];
+  var weight = [];
+  var speed = [];
+  var bench = [];
+  var dead = [];
+  var squatHold = [];
   //all functions need integration with db
+  //NOTE Commented out functions in this section are experimental weekly views and are not ready for deploy
   return {
-    // checkMeStr : function(strong){
-    //   console.log(strong, 'clicked');
-    //   strength.push(strong);
-    // },
-    // checkMeSpd : function(timeSpd, distance){
-    //   console.log(timeSpd, distance);
-    //   speed.push((distance/timeSpd)*60);
-    // },
-    // checkMeWgt : function(weigh){
-    //   console.log(weigh, 'clicked');
-    //   weight.push(weigh);
-    // },
     getStr : function(){
       return strength;
+    },
+    getBnch : function(){
+      return bench;
+    },
+    getDed : function(){
+      return dead;
+    },
+    getSqu : function(){
+      return squatHold;
     },
     getSpd : function(){
       return speed;
@@ -188,101 +318,241 @@ angular.module('crptFit.services', [])
     getWgt : function(){
       return weight;
     },
+    getSelf : function(){
+      return selfUid;
+    },
+    pushBnch : function(val){
+      // if(bench.length < 8){bench.push(val);}else{
+      // bench.shift();
+      bench.push(val);
+      // }
+    },
+    pushDed : function(val){
+      // if(dead.length < 8){dead.push(val);}else{
+      // dead.shift();
+      dead.push(val);
+      // }
+    },
+    pushSqu : function(val){
+      // if(squatHold.length < 8){squatHold.push(val);}else{
+      // squatHold.shift();
+      squatHold.push(val);
+      // }
+    },
+    pushSpd : function(val){
+      // if(speed.length < 8){speed.push(val);}else{
+      // speed.shift();
+      speed.push(val);
+      // }
+    },
+    pushWgt : function(val){
+      // if(weight.length < 8){weight.push(val);}else{
+      // weight.shift();
+      weight.push(val);
+      // }
+    },
     //all functions below here need to be tested and found working
-    postStr : function(val){
+    postBnch: function(stat){
       $http({
         method: 'POST',
-        url: '/auth/stats',
-        data: val
-      }).then(function(data){
-        console.log(data);
-        queryStr();
+        url: '/auth/bench/'+stat
       });
     },
-    postSpd : function(val){
-      //this function needs the proper AJAX request
+    postDed: function(stat){
       $http({
         method: 'POST',
-        url: '/auth/stats',
-        data: val
-      }).then(function(data){
-        console.log(data);
-        querySpd();
+        url: '/auth/deadlift/'+stat,
       });
     },
-    postWgt : function(val){
-      //this function needs the proper AJAX request
+    postSqu: function(stat){
       $http({
         method: 'POST',
-        url: '/auth/stats',
-        data: val
-      }).then(function(data){
-        console.log(data);
-        queryWgt();
+        url: '/auth/squat/'+stat,
       });
     },
-    queryStr : function(){
+    postSpd : function(stat){
+      $http({
+        method: 'POST',
+        url: '/auth/speed/'+stat,
+      });
+    },
+    postWgt : function(stat){
+      $http({
+        method: 'POST',
+        url: '/auth/weight/'+stat,
+      });
+    },
+    queryBnch : function(val){
       $http({
         method: 'GET',
-        url: '/auth/stats'
+        url: '/auth/benchpress/'+val
       }).then(function(response){
-        stat = response.data;
-        strength.push(stat);
+        if(bench.length === 0){
+          // if(response.data.length <= 8){
+            for(var x = 0; x < response.data.length; x++){
+              bench.push(response.data[x].benchpress);
+            }
+          // }else{
+          //   bench.push(response.data[response.data.length-1].benchpress);
+          // }
+        }
       }, function(error){
         console.log('Something went wrong : ', error);
       });
     },
-    querySpd : function(){
+    queryDed : function(uId){
       $http({
         method: 'GET',
-        url: '/auth/stats'
+        url: '/auth/deadlift/'+uId
       }).then(function(response){
-        stat = response.data;
-        speed.push(stat);
+        if(dead.length === 0){
+          // if(response.data.length <= 8){
+            for(var x = 0; x < response.data.length; x++){
+              dead.push(response.data[x].deadlift);
+            }
+          // }else{
+          //   dead.push(response.data[response.data.length-1].deadlift);
+          // }
+        }
       }, function(error){
         console.log('Something went wrong : ', error);
       });
     },
-    queryWgt : function(){
+    querySqu : function(uId){
       $http({
         method: 'GET',
-        url: '/auth/stats'
+        url: '/auth/squats/'+uId
       }).then(function(response){
-        stat = response.data;
-        weight.push(stat);
+        if(squatHold.length === 0){
+          // if(response.data.length <= 8){
+            for(var x = 0; x < response.data.length; x++){
+              squatHold.push(response.data[x].squat);
+            }
+          // }else{
+          //   squatHold.push(response.data[response.data.length-1].squat);
+          // }
+        }
+      }, function(error){
+        console.log('Something went wrong : ', error);
+      });
+    },
+    querySpd : function(uId){
+      $http({
+        method: 'GET',
+        url: '/auth/speeds/'+uId
+      }).then(function(response){
+        if(speed.length === 0){
+          // if(response.data.length <= 8){
+            for(var x = 0; x < response.data.length; x++){
+              speed.push(response.data[x].speed);
+            }
+        // }else{
+        //   for(var i = response.data.length-8; i < response.length; i++){
+        //       speed.push(response.data[i].speed);
+        //     }
+          // }
+        }
+      }, function(error){
+        console.log('Something went wrong : ', error);
+      });
+    },
+    queryWgt : function(uId){
+      $http({
+        method: 'GET',
+        url: '/auth/weight/'+uId
+      }).then(function(response){
+        if(weight.length === 0){
+          // if(response.data.length <= 8){
+            for(var x = 0; x < response.data.length; x++){
+              weight.push(response.data[x].weight);
+            }
+        //   }else{
+        //     weight.push(response.data[response.data.length-1].weight);
+        //   }
+        }
       }, function(error){
         console.log('Something went wrong : ', error);
       });
     }
   };
 }])
-.factory('Task', ['$http', function($http){
-  var testTask = [
-    {task: 'Task1', todo: 'Run a million miles'},
-    {task: 'Task2', todo: 'Find the dragonballs'},
-    {task: 'Task3', todo: 'Become Perfectly Huge'}
-  ];
+
+.factory('Finder', ['$http', '$q', '$window', function($http, $q, $window) {
+  var nearbyUsers = [];
+  var userLat;
+  var userLng;
   return {
-    finishTask : function(task){
-      //UNCOMMENT FOR PRODUCTION
-      $http({
-        method: 'POST',
-        url: '/auth/tasks',
-      });
-      console.log(task, 'clicked');
-      testTask.splice(testTask.indexOf(task), 1);
+    findLocation: function () {
+      var deferred = $q.defer();
+
+        if(!$window.navigator) {
+          deferred.reject(new Error('Geolocation is not supported'));
+        } else {
+          $window.navigator.geolocation.getCurrentPosition(function(position) {
+            deferred.resolve({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            });
+            userLat = position.coords.latitude;
+            userLng = position.coords.longitude;
+            console.log('LAT', userLat);
+            console.log('LNG', userLng)
+          }, deferred.reject);
+        }
+
+        return deferred.promise;
+       },
+    returnMyLat: function () {
+      return userLat
     },
-    getTask : function(){
+    returnMyLng: function () {
+      return userLng
+    },
+    matchCheck: function (userId) {
       $http({
         method: 'GET',
-        url: '/auth/tasks',
-      }).then(function(response){
-        tasks = response.data;
-        testTask.push(tasks);
-      });
+        url: 'auth/matchcheck' + userId
+      }).then(function (response) {
+
+      })
     },
-    taskFunc : function(){
-      return testTask;
-    }
-  };
-}]);
+    postUsersLocation: function(latitude, longitude) {
+      console.log('SERVICE LAT', latitude);
+      console.log('SERVICE LNG', longitude);
+      $http({
+        method: 'POST',
+        url: '/auth/location',
+        data : {
+          lat: latitude,
+          lng: longitude
+          }
+        })
+      },
+    onLeftSwipe: function(userId) {
+      console.log('ON LEFT SWIPE FIRED', userId)
+      $http({
+        method: 'POST',
+        url: 'auth/leftswipe/' + userId,
+      })
+    },
+   onRightSwipe: function(userId) {
+     console.log('ON RIGHT SWIPE FIRED', userId)
+     $http({
+       method: 'POST',
+       url: 'auth/rightswipe/' + userId
+     })
+    },
+    returnNearbyUsers: function () {
+      return nearbyUsers
+    },
+    getNearbyUsers: function() {
+    $http({
+      method: 'GET',
+      url: '/auth/nearbyusers'
+    })
+    .then(function(response) {
+      nearbyUsers.push(response.data)
+    })
+  }
+}
+}])
